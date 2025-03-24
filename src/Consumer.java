@@ -1,0 +1,169 @@
+import java.io.*;
+import java.lang.reflect.Array;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
+
+
+public class Consumer {
+    static ObjectOutputStream objectOutputStream;
+    static ObjectInputStream objectInputStream;
+    static Integer maxQueueLength;
+
+    static ArrayList<ConsumerThread> consumerThreadsListInfo = new ArrayList<>();
+    static ArrayList<Thread> consumerThreadsList = new ArrayList<>();
+    static Dictionary<String, Integer> currentlyHandlingFiles = new Hashtable<>();
+    static Dictionary<String, ArrayList<byte[]>> currentlyHandlingQueue = new Hashtable<>();
+    static ArrayList<String> currentlyHandlingQueueOrder = new ArrayList<>();
+    static Thread listenerThread;
+
+    static boolean allFilesSubmitted = false;
+
+    static class ListenerThread implements Runnable {
+        // Overriding the run Method
+        @Override
+        public void run() {
+            while (true) {
+                try {
+                    // 2: wait for request from producer
+                    Message messageFromProducer = (Message) objectInputStream.readObject();
+                    StatusCode statusCode = messageFromProducer.getStatusCode();
+
+                    // 3: check message type
+                    if (statusCode == StatusCode.REQUEST) {
+
+                        // file currently being handled by a thread
+                        Integer threadIndex = currentlyHandlingFiles.get(messageFromProducer.getFilename());
+                        if (threadIndex != null) {
+                            consumerThreadsListInfo.get(threadIndex).modifyBuffer(0, messageFromProducer);
+                        }
+
+                        // if file currently exists in the queue
+                        else if (currentlyHandlingQueue.get(messageFromProducer.getFilename()) != null) {
+
+                            currentlyHandlingQueue.get(messageFromProducer.getFilename()).add(messageFromProducer.getBytesToSendArray());
+                        }
+
+                        // queue if full
+                        else if (currentlyHandlingQueueOrder.size() >= maxQueueLength) {
+                            Message queuedMessage = new Message(StatusCode.QUEUE_FULL);
+                            objectOutputStream.writeObject(queuedMessage);
+                            objectOutputStream.flush();
+                        }
+
+                        // put a new request in queue
+                        else {
+
+                            currentlyHandlingQueueOrder.add(messageFromProducer.getFilename());
+                            currentlyHandlingQueue.put(messageFromProducer.getFilename(), new ArrayList<>());
+                            currentlyHandlingQueue.get(messageFromProducer.getFilename()).add(messageFromProducer.getBytesToSendArray());
+
+
+                        }
+
+                    } else if (statusCode == StatusCode.FILE_COMPLETE) {
+                        Integer index = currentlyHandlingFiles.get(messageFromProducer.getFilename());
+
+                        // file is done downloading
+                        if (index != null) {
+                            currentlyHandlingFiles.remove(messageFromProducer.getFilename());
+                        }
+
+
+                    } else if (statusCode == StatusCode.FILE_ALL_COMPLETE) {
+                        Message queuedMessage = new Message(StatusCode.FILE_ALL_COMPLETE);
+                        objectOutputStream.writeObject(queuedMessage);
+                        objectOutputStream.flush();
+
+                        for (int i = 0; i < consumerThreadsListInfo.size(); i++) {
+                            consumerThreadsListInfo.get(i).shutdown();
+                            consumerThreadsList.get(i).join();
+                        }
+
+                        allFilesSubmitted = true;
+                        break;
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+
+
+
+    public static void main(String[] args) {
+
+        System.out.print("Number of consumer threads: ");
+        Scanner scanner = new Scanner(System.in);
+        int consumerThreadsNum = scanner.nextInt();
+
+
+        System.out.print("Max queue length: ");
+        maxQueueLength = scanner.nextInt();
+        scanner.close();
+
+        try {
+            Files.createDirectory(Paths.get(System.getProperty("user.dir") + "\\output"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        // 1: create a socket to connect to
+        try {
+            ServerSocket serverSocket = new ServerSocket(3000);
+
+            System.out.println("Hosting server: " + serverSocket.getInetAddress().getHostAddress());
+            Socket socket = serverSocket.accept();
+
+            System.out.println("Client has connected.");
+
+            objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+            objectInputStream = new ObjectInputStream(socket.getInputStream());
+
+            listenerThread = new Thread(new ListenerThread());
+            listenerThread.start();
+
+
+            for (int i = 0; i < consumerThreadsNum; i++) {
+                consumerThreadsListInfo.add(new ConsumerThread(i));
+                consumerThreadsList.add(new Thread(consumerThreadsListInfo.get(i).new thread()));
+                consumerThreadsList.get(i).start();
+            }
+
+            while (!allFilesSubmitted) {
+                // it is assumed that all items in the queue are new items
+                for (int i = 0; i < currentlyHandlingQueueOrder.size(); i++) {
+                    for (int j = 0; j < consumerThreadsListInfo.size(); j++) {
+                        // is consumer thread free? if so, assign
+                        if (consumerThreadsListInfo.get(j).getProducerThreadAssigned() == -1) {
+                            consumerThreadsListInfo.get(j).assignNewFile(currentlyHandlingQueueOrder.get(i));
+
+                            currentlyHandlingQueue.remove(currentlyHandlingQueueOrder.get(i));
+                            currentlyHandlingQueueOrder.remove(i);
+                            i--;
+                            break;
+                        }
+
+
+                    }
+                }
+
+            }
+            System.out.println("Finished receiving all files. Shutting down.");
+            listenerThread.join();
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
+
+}
+
