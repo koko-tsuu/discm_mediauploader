@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 // Singleton
 public class Producer {
@@ -36,6 +37,7 @@ public class Producer {
         for (int i = 0; i < numThreads; i++) {
             producerThreadsInfo.add(new ProducerThread(i));
             producerThreads.add(new Thread(producerThreadsInfo.get(i).new thread()));
+            producerThreads.get(i).start();
         }
 
 
@@ -80,7 +82,7 @@ public class Producer {
 
 
     public static void main(String[] args) {
-
+        boolean isConnected = false;
         System.out.print("Number of producers: ");
         Scanner scanner = new Scanner(System.in);
 
@@ -92,23 +94,31 @@ public class Producer {
         listenerThread.start();
 
         // 1: create a socket to connect to
-        try {
-            socket = new Socket("localhost", 3000);
-            System.out.println("Connected to server");
-            objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-            objectInputStream = new ObjectInputStream(socket.getInputStream());
+
+        while (!isConnected) {
+            try {
+                socket = new Socket("localhost", 3000);
+                System.out.println("Connected to server");
+                isConnected = true;
+                objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+                objectInputStream = new ObjectInputStream(socket.getInputStream());
 
 
-            mainThread(producerInstances);
+                mainThread(producerInstances);
 
 
-            socket.close();
+                socket.close();
 
-            objectOutputStream.close();
-            objectInputStream.close();
+                objectOutputStream.close();
+                objectInputStream.close();
 
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            } catch (IOException e) {
+                System.out.println("Could not connect to server. Retrying in 3 seconds.");
+                try {
+                    TimeUnit.SECONDS.sleep(3);
+                } catch (InterruptedException ex) {
+                }
+            }
         }
 
 

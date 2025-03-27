@@ -1,4 +1,5 @@
 import java.io.Serializable;
+import java.util.Arrays;
 
 enum StatusCode {
     REQUEST,
@@ -33,12 +34,22 @@ public class Message implements Serializable {
 
     }
 
-    public Message(StatusCode statusCode, int threadIndexProducer) {
+    public Message(StatusCode statusCode, String filename, int threadIndexProducer) {
         this.statusCode = statusCode;
         this.byteSize = 0;
         this.filename = null;
         this.threadIndexProducer = threadIndexProducer;
         this.bytesToSendArray = null;
+
+    }
+
+
+    public Message(StatusCode statusCode, byte[] bytesToSendArray) {
+        this.statusCode = statusCode;
+        this.byteSize = 0;
+        this.filename = null;
+        this.threadIndexProducer = -1;
+        this.bytesToSendArray = bytesToSendArray;
 
     }
 
@@ -58,5 +69,10 @@ public class Message implements Serializable {
 
     byte[] getBytesToSendArray() {
         return bytesToSendArray;
+    }
+
+    @Override
+    public String toString() {
+        return byteSize + " " + statusCode + " " + filename + " " + threadIndexProducer;
     }
 }

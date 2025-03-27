@@ -26,6 +26,7 @@ public class ProducerThread {
                     }
                     if (!checkIfDuplicate(listOfFiles[fileIndex])) {
                         while (fileIndex != listOfFiles.length) {
+                            System.out.println("Sending file: " + listOfFiles[fileIndex].getName());
                             byte[] buffer = new byte[MAX_BYTES];
                             //try-with-resources to ensure closing stream
                             try (FileInputStream fis = new FileInputStream(listOfFiles[fileIndex]);
@@ -69,7 +70,7 @@ public class ProducerThread {
     public ProducerThread(int threadIndex) {
 
         this.threadIndex = threadIndex;
-        this.path = String.valueOf(this.threadIndex);
+        this.path = String.valueOf(this.threadIndex + 1);
     }
 
 
@@ -109,7 +110,7 @@ public class ProducerThread {
 
             }
             else if (statusCode == StatusCode.FILE_COMPLETE) {
-                objectOutputStream.writeObject(new Message(StatusCode.FILE_COMPLETE, threadIndex));
+                objectOutputStream.writeObject(new Message(StatusCode.FILE_COMPLETE, filename, threadIndex));
             }
 
             objectOutputStream.flush();

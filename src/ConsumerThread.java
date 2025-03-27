@@ -3,6 +3,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class ConsumerThread {
 
@@ -12,12 +13,13 @@ public class ConsumerThread {
             try {
                 while (running)
                 {
-                    if (producerThreadAssigned != -1 && !buffer.isEmpty())
+                    if (filename != null && !buffer.isEmpty())
                     {
                         StatusCode statusCode = buffer.getFirst().getStatusCode();
                         // if request
                         if (statusCode == StatusCode.REQUEST)
                         {
+                            System.out.println(Arrays.toString(buffer.getFirst().getBytesToSendArray()));
                             fileOutputStream.write(buffer.getFirst().getBytesToSendArray());
                         }
 
@@ -26,12 +28,13 @@ public class ConsumerThread {
                         {
                             // file size is sent from producer to check if file is not corrupted
                             if (buffer.getFirst().getByteSize() == currentBytesReceived){
-                                System.out.println("Successfully received file " + filename);
+                                System.out.println("Successfully received file: " + filename);
                             }
                             else {
-                                System.out.println("Error receiving file " + filename);
+                                System.out.println("Error receiving file: " + filename);
                             }
                             fileOutputStream.close();
+                            cleanUpAfterDownloadingFile();
                         }
                         buffer.removeFirst();
 
@@ -49,7 +52,6 @@ public class ConsumerThread {
     private final int threadIndex;
     private String filename;
     private int currentBytesReceived = 0;
-    private int producerThreadAssigned;
     private boolean running = true;
     private ArrayList<Message> buffer = new ArrayList<>();
 
@@ -59,10 +61,6 @@ public class ConsumerThread {
 
 
 
-    int getProducerThreadAssigned() {
-        return producerThreadAssigned;
-    }
-
     void shutdown() {
         this.running = false;
     }
@@ -71,7 +69,7 @@ public class ConsumerThread {
         try {
             File file = new File(System.getProperty("user.dir") + "\\output\\" + filename);
             file.createNewFile(); // if file already exists will do nothing
-
+            
             fileOutputStream = new FileOutputStream(file);
             // this.producerThreadAssigned = producerThreadAssigned;
         } catch (Exception e) {
@@ -80,9 +78,12 @@ public class ConsumerThread {
 
     }
 
+    String getFileName() {
+        return filename;
+    }
+
     void cleanUpAfterDownloadingFile()
     {
-        producerThreadAssigned = -1;
         currentBytesReceived = 0;
         filename = null;
 
