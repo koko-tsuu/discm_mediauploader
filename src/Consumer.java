@@ -1,5 +1,4 @@
 import java.io.*;
-import java.lang.reflect.Array;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -12,27 +11,26 @@ public class Consumer {
     static ObjectInputStream objectInputStream;
     static Integer maxQueueLength;
 
-    static ArrayList<ConsumerThread> consumerThreadsListInfo = new ArrayList<>();
-    static ArrayList<Thread> consumerThreadsList = new ArrayList<>();
-    static Dictionary<String, Integer> currentlyHandlingFiles = new Hashtable<>();
-    static Dictionary<String, ArrayList<byte[]>> currentlyHandlingQueue = new Hashtable<>();
-    static ArrayList<String> currentlyHandlingQueueOrder = new ArrayList<>();
-    static Thread listenerThread;
-    static Thread assignerThread;
+    volatile static ArrayList<ConsumerThread> consumerThreadsList = new ArrayList<>();
+    volatile static Dictionary<String, Integer> filesInProgress = new Hashtable<>();
+    volatile static Dictionary<String, ArrayList<byte[]>> queueBytesDictionary = new Hashtable<>();
+    volatile static ArrayList<String> queueOrder = new ArrayList<>();
+    volatile static Thread listenerThread;
+    volatile static Thread assignerThread;
 
-    static ArrayList<Message> messageQueue = new ArrayList<>();
+    volatile static ArrayList<Message> messageQueue = new ArrayList<>();
 
-    static boolean allFilesSubmitted = false;
+    volatile static boolean allFilesSubmitted = false;
 
     static class ListenerThread implements Runnable {
         // Overriding the run Method
         @Override
         public void run() {
-            while (true) {
+            while (!allFilesSubmitted) {
                 try {
                     // 2: wait for request from producer
                     Message messageFromProducer = (Message) objectInputStream.readObject();
-                    System.out.println("Message received: " + messageFromProducer.toString());
+
                     modifyMessageQueue(0, messageFromProducer);
 
                 } catch (Exception e) {
@@ -41,33 +39,36 @@ public class Consumer {
             }
         }
     }
+
     static class AssignerThread implements Runnable {
         @Override
         public void run() {
             while (!allFilesSubmitted) {
 
                 if (!messageQueue.isEmpty()) {
+                    System.out.println("Message received: " + messageQueue.getFirst().toString());
                     Message messageFromProducer = messageQueue.getFirst();
                     StatusCode statusCode = messageFromProducer.getStatusCode();
+                    String messageFilename = messageFromProducer.getFilename();
+                    byte[] messageFileData = messageFromProducer.getBytesToSendArray();
 
                     try {
                         // 3: check message type
                         if (statusCode == StatusCode.REQUEST) {
 
                             // file currently being handled by a thread
-                            Integer threadIndex = currentlyHandlingFiles.get(messageFromProducer.getFilename());
+                            Integer threadIndex = filesInProgress.get(messageFilename);
                             if (threadIndex != null) {
-                                consumerThreadsListInfo.get(threadIndex).modifyBuffer(0, messageFromProducer);
+                                consumerThreadsList.get(threadIndex).modifyBuffer(0, messageFromProducer);
                             }
 
                             // if file currently exists in the queue
-                            else if (currentlyHandlingQueue.get(messageFromProducer.getFilename()) != null) {
-
-                                currentlyHandlingQueue.get(messageFromProducer.getFilename()).add(messageFromProducer.getBytesToSendArray());
+                            else if (queueBytesDictionary.get(messageFilename) != null) {
+                                modifyQueueBytesDictionary(2, messageFilename, messageFileData);
                             }
 
-                            // queue if full
-                            else if (currentlyHandlingQueueOrder.size() >= maxQueueLength) {
+                            // queue is full
+                            else if (queueOrder.size() >= maxQueueLength) {
                                 Message queuedMessage = new Message(StatusCode.QUEUE_FULL);
                                 objectOutputStream.writeObject(queuedMessage);
                                 objectOutputStream.flush();
@@ -75,19 +76,17 @@ public class Consumer {
 
                             // put a new request in queue
                             else {
-
-                                modifyCurrentlyHandlingQueueOrder(0, messageFromProducer.getFilename(), -1);
-                                modifyCurrentlyHandlingQueue(0, messageFromProducer.getFilename(), messageFromProducer.getBytesToSendArray());
+                                addQueue(messageFilename, messageFileData);
 
 
                             }
 
                         } else if (statusCode == StatusCode.FILE_COMPLETE) {
-                            Integer index = currentlyHandlingFiles.get(messageFromProducer.getFilename());
+                            Integer index = filesInProgress.get(messageFilename);
 
                             // file is done downloading
                             if (index != null) {
-                                modifyCurrentlyHandlingFiles(1, messageFromProducer.getFilename(), -1);
+                                modifyFilesInProgress(1, messageFilename, -1);
                             }
 
 
@@ -96,9 +95,8 @@ public class Consumer {
                             objectOutputStream.writeObject(queuedMessage);
                             objectOutputStream.flush();
 
-                            for (int i = 0; i < consumerThreadsListInfo.size(); i++) {
-                                consumerThreadsListInfo.get(i).shutdown();
-                                consumerThreadsList.get(i).join();
+                            for (int i = 0; i < consumerThreadsList.size(); i++) {
+                                consumerThreadsList.get(i).shutdown();
                             }
 
                             allFilesSubmitted = true;
@@ -114,72 +112,71 @@ public class Consumer {
     }
 
     synchronized static void modifyMessageQueue(int type, Message message) {
-        if (type == 0)
-        {
+        if (type == 0) {
             messageQueue.add(message);
-        }
-        else if (type == 1)
-        {
+        } else if (type == 1) {
             messageQueue.removeFirst();
         }
+        System.out.println("Current messages: " + messageQueue.toString());
     }
 
-    synchronized static void modifyCurrentlyHandlingQueue(int type, String filename, byte[] bytesToSendArray) {
-        if (type == 0)
-        {
-            currentlyHandlingQueue.put(filename, new ArrayList<>());
-            currentlyHandlingQueue.get(filename).add(bytesToSendArray);
-        }
-        else if (type == 1)
-        {
-            currentlyHandlingQueue.remove(filename);
+    synchronized static void modifyQueueBytesDictionary(int type, String filename, byte[] bytesToSendArray) {
+        if (type == 0) {
+            queueBytesDictionary.put(filename, new ArrayList<>());
+            queueBytesDictionary.get(filename).add(bytesToSendArray);
+        } else if (type == 1) {
+            queueBytesDictionary.remove(filename);
+        } else if (type == 2) {
+            queueBytesDictionary.get(filename).add(bytesToSendArray);
         }
     }
 
-    synchronized static void modifyCurrentlyHandlingQueueOrder(int type, String filename, int index) {
-        if (type == 0)
-        {
-            currentlyHandlingQueueOrder.add(filename);
-        }
-        else if (type == 1)
-        {
-            currentlyHandlingQueueOrder.remove(index);
+    synchronized static void modifyQueueOrder(int type, String filename, int index) {
+        if (type == 0) {
+            queueOrder.add(filename);
+        } else if (type == 1) {
+            queueOrder.remove(index);
         }
 
     }
 
-    synchronized static void modifyCurrentlyHandlingFiles(int type, String filename, int threadAssigned) {
-        if (type == 0)
-        {
-            currentlyHandlingFiles.put(filename, threadAssigned);
-        }
-        else if (type == 1)
-        {
-            currentlyHandlingFiles.remove(filename);
+    synchronized static void modifyFilesInProgress(int type, String filename, int threadAssigned) {
+        if (type == 0) {
+            filesInProgress.put(filename, threadAssigned);
+        } else if (type == 1) {
+            filesInProgress.remove(filename);
         }
     }
 
+    synchronized static void removeQueue(String filename, int indexToRemove) {
+        modifyQueueBytesDictionary(1, filename, null);
+        modifyQueueOrder(1, null, indexToRemove);
+    }
 
-
+    synchronized static void addQueue(String messageFilename, byte[] messageFileData)
+    {
+        modifyQueueOrder(0, messageFilename, -1);
+        modifyQueueBytesDictionary(0, messageFilename, messageFileData);
+    }
 
 
 
 
     public static void main(String[] args) {
 
-        System.out.print("Number of consumer threads: ");
+        System.out.print("Number of consumer threads: 1");
         Scanner scanner = new Scanner(System.in);
-        int consumerThreadsNum = scanner.nextInt();
+        int consumerThreadsNum = 1;// scanner.nextInt();
 
 
-        System.out.print("Max queue length: ");
-        maxQueueLength = scanner.nextInt();
+        System.out.print("Max queue length: 5");
+        maxQueueLength = 5; //scanner.nextInt();
         scanner.close();
 
         try {
             Files.createDirectory(Paths.get(System.getProperty("user.dir") + "\\output"));
         } catch (IOException e) {
-            System.out.println("Could not create directory as output directory may already exist.");
+           // System.out.println("Could not create directory as output directory may already exist.");
         }
 
         // 1: create a socket to connect to
@@ -203,47 +200,66 @@ public class Consumer {
 
 
             for (int i = 0; i < consumerThreadsNum; i++) {
-                consumerThreadsListInfo.add(new ConsumerThread(i));
-                consumerThreadsList.add(new Thread(consumerThreadsListInfo.get(i).new thread()));
-                consumerThreadsList.get(i).start();
+                consumerThreadsList.add(new ConsumerThread());
             }
 
             while (!allFilesSubmitted) {
+
                 // it is assumed that all items in the queue are new items
-                for (int i = 0; i < currentlyHandlingQueueOrder.size(); i++) {
-                    for (int j = 0; j < consumerThreadsListInfo.size(); j++) {
-                        // is consumer thread free? if so, assign
-                        if (consumerThreadsListInfo.get(j).getFileName() == null) {
+                for (int i = 0; i < queueOrder.size(); i++) {
 
-                            String filename = currentlyHandlingQueueOrder.get(i);
+                    // file currently being handled by a thread
+                    Integer threadIndex = filesInProgress.get(queueOrder.get(i));
+                    if (threadIndex != null) {
+                        ArrayList<byte[]> fileBytes = queueBytesDictionary.get(queueOrder.get(i));
+                        for (int k = 0; i < fileBytes.size(); k++) {
+                            Message message = new Message(StatusCode.REQUEST, fileBytes.get(k));
+                            consumerThreadsList.get(threadIndex).modifyBuffer(0, message);
 
-                            // new file
-                            consumerThreadsListInfo.get(j).assignNewFile(filename);
-                            // add to currently handling files
-                            modifyCurrentlyHandlingFiles(0, filename, j);
-
-                            ArrayList<byte[]> fileBytesToBeHandled = currentlyHandlingQueue.get(filename);
-
-                            // add all bytes
-                            for (int k = 0; i < fileBytesToBeHandled.size(); k++){
-
-                                Message message = new Message(StatusCode.REQUEST, fileBytesToBeHandled.get(k));
-                                consumerThreadsListInfo.get(j).modifyBuffer(0, message);
-                            }
-
-                            modifyCurrentlyHandlingQueue(1, filename, null);
-                            modifyCurrentlyHandlingQueueOrder(1, null, i);
-                            i--;
-                            break;
                         }
 
+                        removeQueue(queueOrder.get(i), i);
 
+                    }
+                    else {
+                        for (int j = 0; j < consumerThreadsList.size(); j++) {
+                            // is consumer thread free? if so, assign
+                            if (consumerThreadsList.get(j).getFileName() == null) {
+
+                                // get filename of the file we're handling
+                                String filename = queueOrder.get(i);
+
+                                // new file
+                                consumerThreadsList.get(j).assignNewFile(filename);
+                                // add to currently handling files
+                                modifyFilesInProgress(0, filename, j);
+
+                                ArrayList<byte[]> fileBytesToBeHandled = queueBytesDictionary.get(filename);
+
+                                // add all bytes
+                                for (int k = 0; i < fileBytesToBeHandled.size(); k++) {
+
+                                    Message message = new Message(StatusCode.REQUEST, fileBytesToBeHandled.get(k));
+                                    consumerThreadsList.get(j).modifyBuffer(0, message);
+
+                                }
+
+                                removeQueue(filename, i);
+                                i--;
+                                break;
+                            }
+
+
+                        }
                     }
                 }
 
             }
             System.out.println("Finished receiving all files. Shutting down.");
+
             listenerThread.join();
+            assignerThread.join();
+            serverSocket.close();
 
 
         } catch (Exception e) {

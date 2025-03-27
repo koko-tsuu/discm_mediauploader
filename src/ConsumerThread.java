@@ -7,12 +7,13 @@ import java.util.Arrays;
 
 public class ConsumerThread {
 
-    class thread implements Runnable {
+    class CThread implements Runnable {
         @Override
         public void run() {
-            try {
-                while (running)
-                {
+
+            while (running)
+            {
+                try {
                     if (filename != null && !buffer.isEmpty())
                     {
                         StatusCode statusCode = buffer.getFirst().getStatusCode();
@@ -36,39 +37,54 @@ public class ConsumerThread {
                             fileOutputStream.close();
                             cleanUpAfterDownloadingFile();
                         }
-                        buffer.removeFirst();
+                        modifyBuffer(1, null);
 
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-
-
-            } catch (Exception e) {
-                e.printStackTrace();
             }
+
+
+
         }
     }
 
     private FileOutputStream fileOutputStream;
-    private final int threadIndex;
     private String filename;
-    private int currentBytesReceived = 0;
-    private boolean running = true;
-    private ArrayList<Message> buffer = new ArrayList<>();
+    private volatile int currentBytesReceived = 0;
+    private volatile boolean running = true;
+    private volatile ArrayList<Message> buffer = new ArrayList<>();
+    private Thread consumerThread;
 
-    public ConsumerThread(int threadIndex) {
-        this.threadIndex = threadIndex;
+    public ConsumerThread() {
+        this.consumerThread = new Thread(new CThread());
+        this.consumerThread.start();
     }
 
 
 
     void shutdown() {
+
         this.running = false;
+        try {
+            consumerThread.join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     void assignNewFile(String filename) {
         try {
+            this.filename = filename;
             File file = new File(System.getProperty("user.dir") + "\\output\\" + filename);
-            file.createNewFile(); // if file already exists will do nothing
+            if (file.createNewFile())
+            {
+                System.out.println("File created: " + filename);
+            }
+            else {
+                System.out.println("File already exists: " + filename);
+            }
             
             fileOutputStream = new FileOutputStream(file);
             // this.producerThreadAssigned = producerThreadAssigned;
@@ -84,6 +100,7 @@ public class ConsumerThread {
 
     void cleanUpAfterDownloadingFile()
     {
+        buffer.clear();
         currentBytesReceived = 0;
         filename = null;
 
@@ -102,7 +119,12 @@ public class ConsumerThread {
             buffer.removeFirst();
         }
 
+        System.out.println("buffer: " + buffer.size());
+
+
+
     }
+
 }
 
 

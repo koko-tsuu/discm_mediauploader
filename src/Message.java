@@ -13,15 +13,29 @@ public class Message implements Serializable {
    private final long byteSize;
    private final StatusCode statusCode;
    private final String filename;
-   private final int threadIndexProducer;
    private final byte[] bytesToSendArray;
 
-    public Message(long byteSize, StatusCode statusCode, String filename, int threadIndexProducer, byte[] bytesToSendArray) {
+    public Message(long byteSize, StatusCode statusCode, String filename, byte[] bytesToSendArray) {
         this.byteSize = byteSize;
         this.statusCode = statusCode;
         this.filename = filename;
-        this.threadIndexProducer = threadIndexProducer;
         this.bytesToSendArray = bytesToSendArray;
+
+    }
+
+    public Message(long byteSize, StatusCode statusCode, String filename) {
+        this.byteSize = byteSize;
+        this.statusCode = statusCode;
+        this.filename = filename;
+        this.bytesToSendArray = null;
+
+    }
+
+    public Message(StatusCode statusCode, String filename) {
+        this.byteSize = 0;
+        this.statusCode = statusCode;
+        this.filename = filename;
+        this.bytesToSendArray = null;
 
     }
 
@@ -29,35 +43,23 @@ public class Message implements Serializable {
         this.statusCode = statusCode;
         this.byteSize = 0;
         this.filename = null;
-        this.threadIndexProducer = 0;
         this.bytesToSendArray = null;
 
     }
 
-    public Message(StatusCode statusCode, String filename, int threadIndexProducer) {
-        this.statusCode = statusCode;
-        this.byteSize = 0;
-        this.filename = null;
-        this.threadIndexProducer = threadIndexProducer;
-        this.bytesToSendArray = null;
 
-    }
 
 
     public Message(StatusCode statusCode, byte[] bytesToSendArray) {
         this.statusCode = statusCode;
         this.byteSize = 0;
         this.filename = null;
-        this.threadIndexProducer = -1;
         this.bytesToSendArray = bytesToSendArray;
 
     }
 
     StatusCode getStatusCode() {
         return statusCode;
-    }
-    int getThreadIndexProducer() {
-        return threadIndexProducer;
     }
 
     long getByteSize() {
@@ -73,6 +75,6 @@ public class Message implements Serializable {
 
     @Override
     public String toString() {
-        return byteSize + " " + statusCode + " " + filename + " " + threadIndexProducer;
+        return byteSize + " " + statusCode + " " + filename;
     }
 }

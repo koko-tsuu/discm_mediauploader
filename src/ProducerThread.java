@@ -2,12 +2,13 @@ import java.io.*;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.Hashtable;
 
 public class ProducerThread {
 
-    class thread implements Runnable {
+    class PThread implements Runnable {
         @Override
         public void run()
         {
@@ -16,12 +17,14 @@ public class ProducerThread {
                 File folder = new File(System.getProperty("user.dir") + "\\" + path);
                 File[] listOfFiles = folder.listFiles();
 
+
                 System.out.println("Current working directory in Java : " + folder);
 
                 if (listOfFiles != null) {
                     for (File file : listOfFiles) {
                         if (file.isFile()) {
                             System.out.println(file.getName());
+                            System.out.println(file.length());
                         }
                     }
                     if (!checkIfDuplicate(listOfFiles[fileIndex])) {
@@ -35,7 +38,7 @@ public class ProducerThread {
 
                                 int bytesAmount = 0;
                                 while ((bytesAmount = bis.read(buffer)) > 0) {
-                                    send(StatusCode.REQUEST, bytesAmount, listOfFiles[fileIndex].getName(), buffer);
+                                    send(StatusCode.REQUEST, bytesAmount, listOfFiles[fileIndex].getName(), Arrays.copyOf(buffer, bytesAmount));
                                 }
 
                                 send(StatusCode.FILE_COMPLETE, listOfFiles[fileIndex].length(), listOfFiles[fileIndex].getName(), null);
@@ -64,13 +67,16 @@ public class ProducerThread {
     private final int threadIndex;
     private boolean isDone = false;
     private final String path;
-    private int MAX_BYTES = 1024 * 1024;
+    private int MAX_BYTES = 1024 * 3;
+    private Thread producerThread;
     static Dictionary<byte[], Boolean> allVideosHash = new Hashtable<>();
 
     public ProducerThread(int threadIndex) {
 
         this.threadIndex = threadIndex;
         this.path = String.valueOf(this.threadIndex + 1);
+        this.producerThread = new Thread(new PThread());
+        this.producerThread.start();
     }
 
 
@@ -103,14 +109,14 @@ public class ProducerThread {
 
     }
 
-    synchronized void send(StatusCode statusCode, long byteSize, String filename, byte[] data) {
+    synchronized static void send(StatusCode statusCode, long byteSize, String filename, byte[] data) {
         try {
             if (statusCode == StatusCode.REQUEST) {
-                objectOutputStream.writeObject(new Message(byteSize, StatusCode.REQUEST, filename, threadIndex, data));
+                objectOutputStream.writeObject(new Message(byteSize, StatusCode.REQUEST, filename, data));
 
             }
             else if (statusCode == StatusCode.FILE_COMPLETE) {
-                objectOutputStream.writeObject(new Message(StatusCode.FILE_COMPLETE, filename, threadIndex));
+                objectOutputStream.writeObject(new Message(byteSize, StatusCode.FILE_COMPLETE, filename));
             }
 
             objectOutputStream.flush();

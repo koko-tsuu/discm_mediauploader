@@ -12,7 +12,7 @@ public class Producer {
         @Override
         public void run()
         {
-            while (!producerThreadsInfo.isEmpty()) {
+            while (!producerThreads.isEmpty()) {
                 try {
                     Message messageFromConsumer = (Message) objectInputStream.readObject();
                     if (messageFromConsumer == null) {}
@@ -24,8 +24,7 @@ public class Producer {
     }
     static ObjectOutputStream objectOutputStream;
     static ObjectInputStream objectInputStream;
-    static ArrayList<ProducerThread> producerThreadsInfo = new ArrayList<>();
-    static ArrayList<Thread> producerThreads = new ArrayList<>();
+    static ArrayList<ProducerThread> producerThreads = new ArrayList<>();
 
     static Thread listenerThread;
     static Socket socket;
@@ -35,22 +34,14 @@ public class Producer {
     {
         ProducerThread.setObjectStream(objectOutputStream);
         for (int i = 0; i < numThreads; i++) {
-            producerThreadsInfo.add(new ProducerThread(i));
-            producerThreads.add(new Thread(producerThreadsInfo.get(i).new thread()));
-            producerThreads.get(i).start();
+            producerThreads.add(new ProducerThread(i));
         }
 
 
-        while (!producerThreadsInfo.isEmpty()) {
-            for (int i = 0; i < producerThreadsInfo.size(); i++) {
-                if (producerThreadsInfo.get(i).getIsDone())
+        while (!producerThreads.isEmpty()) {
+            for (int i = 0; i < producerThreads.size(); i++) {
+                if (producerThreads.get(i).getIsDone())
                 {
-                    producerThreadsInfo.remove(i);
-                    try {
-                        producerThreads.get(i).join();
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
                     producerThreads.remove(i);
                     i--;
                 }
@@ -60,7 +51,7 @@ public class Producer {
         boolean consumerHasReceivedCompletion = false;
         while (!consumerHasReceivedCompletion) {
             try {
-                socket.setSoTimeout(3000);
+                socket.setSoTimeout(10000);
 
                 Message producerMessage = new Message(StatusCode.FILE_ALL_COMPLETE);
                 objectOutputStream.writeObject(producerMessage);
@@ -83,12 +74,12 @@ public class Producer {
 
     public static void main(String[] args) {
         boolean isConnected = false;
-        System.out.print("Number of producers: ");
-        Scanner scanner = new Scanner(System.in);
+        //System.out.print("Number of producers: ");
+       // Scanner scanner = new Scanner(System.in);
 
-        int producerInstances = scanner.nextInt();
+        int producerInstances = 3; // scanner.nextInt();
 
-        scanner.close();
+       // scanner.close();
 
         listenerThread = new Thread(new ListenerThread());
         listenerThread.start();
