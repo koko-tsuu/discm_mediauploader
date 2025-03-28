@@ -4,6 +4,10 @@ import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+/*
+      NOTE: Format for folder to store the videos to upload is "1" "2" "3", so on and so forth (remove the quotations)
+ */
+
 // Singleton
 public class Producer {
 
@@ -13,13 +17,18 @@ public class Producer {
         @Override
         public void run()
         {
+            // While all threads are still busy
             while (!producerThreads.isEmpty()) {
+
+                // This is for reading if queue is full
                 try {
                     Message messageFromConsumer = (Message) objectInputStream.readObject();
                    if (messageFromConsumer.getStatusCode() == StatusCode.QUEUE_FULL) {
                         System.out.println("[Warning] Queue is full. File [" + messageFromConsumer.getFilename() + "] failed to transfer.");
                     }
                 }catch (Exception e) {
+
+                    // Not a graceful way to terminate the socket, but it works
                     System.out.println("Consumer may have disconnected. Closing socket.");
                     try {
                         socket.close();
@@ -30,8 +39,11 @@ public class Producer {
             }
         }
     }
+
+    // OutputStream is shared to its threads
     static ObjectOutputStream objectOutputStream;
     static ObjectInputStream objectInputStream;
+
     static ArrayList<ProducerThread> producerThreads = new ArrayList<>();
 
     static Thread listenerThread;
@@ -40,14 +52,18 @@ public class Producer {
 
     static void mainThread(int numThreads)
     {
-        ProducerThread.setObjectStream(objectOutputStream);
+        // Thread setup
+        ProducerThread.setObjectStream(objectOutputStream); // this is to use the same objectOutputStream for all producerThreads
         for (int i = 0; i < numThreads; i++) {
             producerThreads.add(new ProducerThread(i));
         }
 
+
+        // Queue full listener
         listenerThread = new Thread(new ListenerThread());
         listenerThread.start();
 
+        //
         while (!producerThreads.isEmpty()) {
             for (int i = 0; i < producerThreads.size(); i++) {
                 if (producerThreads.get(i).getIsDone())
@@ -58,6 +74,8 @@ public class Producer {
             }
         }
 
+        // There's also this thing, but getting the response from the consumer that it's finished with downloading all files
+        // doesn't really work
         boolean consumerHasReceivedCompletion = false;
         while (!consumerHasReceivedCompletion) {
             try {
@@ -67,6 +85,7 @@ public class Producer {
                 objectOutputStream.writeObject(producerMessage);
                 objectOutputStream.flush();
 
+                // This part doesn't really happen, I think
                 objectInputStream.readObject();
                 Message consumerMessage = (Message) objectInputStream.readObject();
                 if (consumerMessage.getStatusCode() == StatusCode.FILE_ALL_COMPLETE) {
@@ -85,26 +104,22 @@ public class Producer {
 
 
     public static void main(String[] args) {
-        //System.out.print("Number of producers: ");
-       // Scanner scanner = new Scanner(System.in);
+        System.out.print("Number of producers: ");
+        Scanner scanner = new Scanner(System.in);
 
-        int producerInstances = 1; // scanner.nextInt();
+        int producerInstances = 1;
 
-       // scanner.close();
+        scanner.close();
 
 
 
         // 1: create a socket to connect to
-
-
         try {
             ServerSocket serverSocket = new ServerSocket(3000);
 
             System.out.println("Hosting server: " + serverSocket.getInetAddress().getHostAddress());
             socket = serverSocket.accept();
 
-
-            ///
 
             try {
                 System.out.println("Client has connected.");
@@ -123,11 +138,8 @@ public class Producer {
 
 
             } catch (Exception e) {
-
-
             }
         } catch (Exception e) {
-
         }
 
 

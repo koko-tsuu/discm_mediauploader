@@ -17,17 +17,21 @@ public class ProducerThread {
                 File folder = new File(System.getProperty("user.dir") + "\\" + path);
                 File[] listOfFiles = folder.listFiles();
 
-
                 System.out.println("Current working directory in Java : " + folder);
 
+                // No files found
                 if (listOfFiles != null) {
+
                     // while all files have not been uploaded
                     while (fileIndex != listOfFiles.length) {
+
                         String fileDuplicateName = checkIfDuplicate(listOfFiles[fileIndex]);
-                        // not a duplicate, therefore null
+
+                        // not a duplicate file, therefore null
                         if (fileDuplicateName == null) {
                             System.out.println("Sending file: " + listOfFiles[fileIndex].getName());
                             byte[] buffer = new byte[MAX_BYTES];
+
                             //try-with-resources to ensure closing stream
                             try (FileInputStream fis = new FileInputStream(listOfFiles[fileIndex]);
 
@@ -41,21 +45,17 @@ public class ProducerThread {
                                 send(StatusCode.FILE_COMPLETE, listOfFiles[fileIndex].length(), listOfFiles[fileIndex].getName(), null);
                             }
 
-
-
                         }
-                        //
+                        // duplicate found, this will no longer upload the file
                         else {
-                            System.out.println("[Duplicate] " + listOfFiles[fileIndex].getName() + " <->" + fileDuplicateName);
+                            System.out.println("[Duplicate] " + listOfFiles[fileIndex].getName() + " <-> " + fileDuplicateName);
                         }
                         fileIndex++;
                  }
-
-
-                    isDone = true;
+                    isDone = true; // this is for Producer.java
 
                 } else {
-                    System.out.println("No files to upload.");
+                    System.out.println("[Empty Folder] No files to upload: " + folder.getName());
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -65,32 +65,24 @@ public class ProducerThread {
         }
     }
 
+    // this is static so that there is only one ObjectOutputStream
     private static ObjectOutputStream objectOutputStream;
 
-    private final int threadIndex;
-    private boolean isDone = false;
-    private final String path;
-    private int MAX_BYTES = 1024 * 3;
-    private Thread producerThread;
-    private volatile static Dictionary<String, String> allVideosHash = new Hashtable<>();
-    static MessageDigest md;
+    private final int threadIndex;              // unique identifier
+    private boolean isDone = false;             // producerThread has finished uploading all the files in its folder
+    private final String path;                  // path to folder
+    private int MAX_BYTES = 1024 * 3;           // feel free to change this
+    private Thread producerThread;              // producerThread holder
+    private volatile static Dictionary<String, String> allVideosHash = new Hashtable<>();       // to check for duplicates
 
-    static {
-        try {
-            md = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-
-        }
-    }
 
     public ProducerThread(int threadIndex) {
 
         this.threadIndex = threadIndex;
-        this.path = String.valueOf(this.threadIndex + 1);
+        this.path = String.valueOf(this.threadIndex + 1); // always start at 0 so i'm just incrementing this
         this.producerThread = new Thread(new PThread());
         this.producerThread.start();
     }
-
 
     static void setObjectStream(ObjectOutputStream objectOutputStream)
     {
@@ -98,16 +90,29 @@ public class ProducerThread {
 
     }
 
-
     synchronized static String checkIfDuplicate(File file)
     {
         try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
             InputStream inputStream = new FileInputStream(file);
+            byte[] buffer = new byte[1024];
 
-            DigestInputStream digestInputStream = new DigestInputStream(inputStream, md);
-            byte[] digest = digestInputStream.getMessageDigest().digest();
+            System.out.println("Checking duplicate: " + file.getName());
 
+            // Read file to get its checksum
+            int numRead;
+            do {
+
+                numRead = inputStream.read(buffer);
+                if (numRead > 0) {
+                    md.update(buffer, 0, numRead);
+                }
+            } while (numRead != -1);
+            byte[] digest = md.digest();
+
+            // This is required
             String hashString = bytesToHex(digest);
+
             String duplicateFile = allVideosHash.get(hashString);
 
             // not a duplicate
@@ -128,6 +133,18 @@ public class ProducerThread {
 
     }
 
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : bytes) {
+            hexString.append(String.format("%02x", b));
+        }
+        System.out.println(Arrays.toString(bytes));
+        System.out.println(hexString);
+        return hexString.toString();
+    }
+
+    // Only one message can be sent at a time, so messages don't get jumbled up
     synchronized static void send(StatusCode statusCode, long byteSize, String filename, byte[] data) {
         try {
             if (statusCode == StatusCode.REQUEST) {
@@ -143,17 +160,6 @@ public class ProducerThread {
             e.printStackTrace();
         }
     }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : bytes) {
-            hexString.append(String.format("%02x", b));
-        }
-        return hexString.toString();
-    }
-
-
-
 
 
     boolean getIsDone(){

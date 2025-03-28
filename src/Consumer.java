@@ -1,42 +1,56 @@
 import java.io.*;
-import java.lang.reflect.Array;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+/*
+    NOTE: Consumer already automatically creates an output directory if it doesn't exist
+ */
 
 public class Consumer {
+    // Shared stream
     static ObjectOutputStream objectOutputStream;
     static ObjectInputStream objectInputStream;
+
     static Integer maxQueueLength;
 
     volatile static ArrayList<ConsumerThread> consumerThreadsList = new ArrayList<>();
+
+    // files that are being downloaded / handled by threads currently
     volatile static Dictionary<String, Integer> filesInProgress = new Hashtable<>();
+    // queued files
     volatile static Dictionary<String, ArrayList<Message>> queueDictionary = new Hashtable<>();
-    volatile static Dictionary<String, Boolean> ignoreFileDictionary = new Hashtable<>();
+    // this is connected to queueDictionary
     volatile static ArrayList<String> queueOrder = new ArrayList<>();
+    // files to be ignored due to queue being full
+    volatile static Dictionary<String, Boolean> ignoreFileDictionary = new Hashtable<>();
+
+    // thread holders
     volatile static Thread listenerThread;
     volatile static Thread assignerThread;
-    volatile static boolean receivedFileComplete = false;
 
+    // recieved the message from the Producer that it has finished sending its file
+    volatile static boolean receivedFileAllCompleteMessage = false;
+
+    // messages from Producer queued
     volatile static ArrayList<Message> messageQueue = new ArrayList<>();
 
-    volatile static boolean allFilesSubmitted = false;
+    //
+    volatile static boolean allFilesDownloaded = false;
 
     static class ListenerThread implements Runnable {
         // Overriding the run Method
         @Override
         public void run() {
-            while (!receivedFileComplete) {
+            while (!receivedFileAllCompleteMessage) {
                 try {
                     // 2: wait for request from producer
                     Message messageFromProducer = (Message) objectInputStream.readObject();
 
                     if (messageFromProducer.getStatusCode() == StatusCode.FILE_ALL_COMPLETE) {
-                        receivedFileComplete = true;
+                        receivedFileAllCompleteMessage = true;
                     }
                     else
                         modifyMessageQueue(ModifyMessageQueueType.APPEND, messageFromProducer);
@@ -62,8 +76,10 @@ public class Consumer {
                 try {
                     // 3: check message type
                     if (statusCode == StatusCode.REQUEST) {
+
                         // if file is not in the blacklist
                         if (ignoreFileDictionary.get(messageFilename) == null) {
+
                             // file currently being handled by a thread
                             Integer threadIndex = filesInProgress.get(messageFilename);
                             if (threadIndex != null) {
@@ -78,6 +94,7 @@ public class Consumer {
                             // queue is full
                             else if (queueOrder.size() >= maxQueueLength) {
                                 try {
+                                    // blacklist the file
                                     System.out.println("Queue is full. File [" + messageFilename + "] will no longer be downloaded and packets related to it will be ignored.");
                                     modifyIgnoreFileDictionary(ModifyIgnoreFileDictionary.ADD, messageFilename);
                                     Message queuedMessage = new Message(StatusCode.QUEUE_FULL, messageFilename);
@@ -98,20 +115,24 @@ public class Consumer {
 
                     } else if (statusCode == StatusCode.FILE_COMPLETE) {
 
-                        // file is not blacklist
+                        // file is not blacklisted
                         if (ignoreFileDictionary.get(messageFilename) == null) {
                             Integer filesInProgressIndex = filesInProgress.get(messageFilename);
                             boolean queueBytesIndexExists = queueDictionary.get(messageFilename) != null;
 
                             // file is done downloading and exists in our filesInProgress
+                            // remove it from filesInProgress and put in the buffer of the thread
                             if (filesInProgressIndex != null) {
                                 consumerThreadsList.get(filesInProgressIndex).modifyBuffer(ConsumerThread.ModifyBufferType.APPEND, messageFromProducer);
                                 modifyFilesInProgress(ModifyFilesInProgressType.REMOVE, messageFilename, -1);
-                                // else just put it into our queue
+
+                            // else just put it into our queue
                             } else if (queueBytesIndexExists) {
                                 modifyQueueDictionary(ModifyQueueDictionaryType.APPEND, messageFromProducer);
                             }
                         }
+
+                        // remove from blacklist
                         else {
                             modifyIgnoreFileDictionary(ModifyIgnoreFileDictionary.REMOVE, messageFilename);
                         }
@@ -122,8 +143,8 @@ public class Consumer {
                 modifyMessageQueue(ModifyMessageQueueType.POP, null);
             }
 
-            // wait until everything is done
-            if (queueDictionary.isEmpty() && queueOrder.isEmpty() && receivedFileComplete) {
+            // wait until everything is done, this will check if there's still anything it missed
+            if (queueDictionary.isEmpty() && queueOrder.isEmpty() && receivedFileAllCompleteMessage) {
                 boolean isDone = true;
                 for (int i = 0; i < consumerThreadsList.size(); i++) {
                     if (consumerThreadsList.get(i).getFileName() != null)
@@ -132,6 +153,7 @@ public class Consumer {
                     }
                 }
 
+                // All threads are done, we can safely join all threads
                 if (isDone) {
                     try {
                         Message queuedMessage = new Message(StatusCode.FILE_ALL_COMPLETE);
@@ -142,7 +164,7 @@ public class Consumer {
                             consumerThreadsList.get(i).shutdown();
                         }
 
-                        allFilesSubmitted = true;
+                        allFilesDownloaded = true;
 
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -155,7 +177,7 @@ public class Consumer {
         {
             for (int i = 0; i < queueOrder.size(); i++) {
 
-                // file currently being handled by a thread
+                // file currently being handled by an existing thread
                 Integer threadIndex = filesInProgress.get(queueOrder.get(i));
                 if (threadIndex != null) {
                     ArrayList<Message> messageArrayList = queueDictionary.get(queueOrder.get(i));
@@ -166,6 +188,8 @@ public class Consumer {
                     i--;
 
                 }
+
+                // try to assign the file to a free thread
                 else {
                     for (int j = 0; j < consumerThreadsList.size(); j++) {
                         // is consumer thread free? if so, assign
@@ -198,7 +222,7 @@ public class Consumer {
         }
         @Override
         public void run() {
-            while (!allFilesSubmitted) {
+            while (!allFilesDownloaded) {
 
                 messageQueueAssigner();
                 // assigning for queue related stuff
@@ -295,22 +319,21 @@ public class Consumer {
 
 
 
-
     public static void main(String[] args) {
 
         System.out.print("Number of consumer threads: 1\n");
         Scanner scanner = new Scanner(System.in);
-        int consumerThreadsNum = 1;// scanner.nextInt();
+        int consumerThreadsNum = scanner.nextInt();
 
 
         System.out.print("Max queue length: 5\n");
-        maxQueueLength = 1; //scanner.nextInt();
+        maxQueueLength = scanner.nextInt();
         scanner.close();
 
         try {
             Files.createDirectory(Paths.get(System.getProperty("user.dir") + "\\output"));
         } catch (IOException e) {
-            // System.out.println("Could not create directory as output directory may already exist.");
+            System.out.println("Could not create directory as output directory may already exist.");
         }
 
         // 1: create a socket to connect to
@@ -326,7 +349,6 @@ public class Consumer {
                     isConnected = true;
                     System.out.println("Connected to server.");
 
-                    assert socket != null;
                     objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
                     objectInputStream = new ObjectInputStream(socket.getInputStream());
 

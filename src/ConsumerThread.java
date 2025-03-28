@@ -7,23 +7,22 @@ import java.util.Arrays;
 
 
 public class ConsumerThread {
-
-
-    enum ModifyBufferType {
-        APPEND,
-        POP
-    }
-
+    
     class CThread implements Runnable {
         @Override
         public void run() {
 
+            // Ensuring that buffer is empty before terminating
             while (running || !buffer.isEmpty())
             {
                 try {
+
+                    // NOTE: This implementation is reliant on the filename not being empty and is unique
+
                     if (filename != null && !buffer.isEmpty())
                     {
                         StatusCode statusCode = buffer.getFirst().getStatusCode();
+
                         // if request
                         if (statusCode == StatusCode.REQUEST)
                         {
@@ -60,17 +59,15 @@ public class ConsumerThread {
 
     private FileOutputStream fileOutputStream;
     private String filename;
-    private volatile int currentBytesReceived = 0;
-    private volatile boolean running = true;
-    private volatile ArrayList<Message> buffer = new ArrayList<>();
+    private int currentBytesReceived = 0;                                   // file length check to see if file was successfully downloaded
+    private volatile boolean running = true;                                // to gracefully shutdown the thread
+    private volatile ArrayList<Message> buffer = new ArrayList<>();         // store all data for a related file
     private Thread consumerThread;
 
     public ConsumerThread() {
         this.consumerThread = new Thread(new CThread());
         this.consumerThread.start();
     }
-
-
 
     void shutdown() {
 
@@ -82,10 +79,13 @@ public class ConsumerThread {
         }
     }
 
+    // Reassign the fileOutputStream to make it point to the new file
     void assignNewFile(String filename) {
         try {
+
             this.filename = filename;
             File file = new File(System.getProperty("user.dir") + "\\output\\" + filename);
+
             if (file.createNewFile())
             {
                 System.out.println("File created: " + filename);
@@ -111,7 +111,12 @@ public class ConsumerThread {
         buffer.clear();
         currentBytesReceived = 0;
         filename = null;
+    }
 
+
+    enum ModifyBufferType {
+        APPEND,
+        POP
     }
 
     synchronized void modifyBuffer(ModifyBufferType type, Message message)
