@@ -46,7 +46,7 @@ public class ProducerThread {
                         }
                         //
                         else {
-                            System.out.println("Duplicate file " + listOfFiles[fileIndex].getName() + " of " + fileDuplicateName);
+                            System.out.println("[Duplicate] " + listOfFiles[fileIndex].getName() + " <->" + fileDuplicateName);
                         }
                         fileIndex++;
                  }
@@ -72,7 +72,16 @@ public class ProducerThread {
     private final String path;
     private int MAX_BYTES = 1024 * 3;
     private Thread producerThread;
-    private volatile static Dictionary<byte[], String> allVideosHash = new Hashtable<>();
+    private volatile static Dictionary<String, String> allVideosHash = new Hashtable<>();
+    static MessageDigest md;
+
+    static {
+        try {
+            md = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+
+        }
+    }
 
     public ProducerThread(int threadIndex) {
 
@@ -94,19 +103,17 @@ public class ProducerThread {
     {
         try {
             InputStream inputStream = new FileInputStream(file);
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
 
             DigestInputStream digestInputStream = new DigestInputStream(inputStream, md);
             byte[] digest = digestInputStream.getMessageDigest().digest();
 
-            String duplicateFile = allVideosHash.get(digest);
-
-            System.out.println(duplicateFile);
-            System.out.println(digest);
+            String hashString = bytesToHex(digest);
+            String duplicateFile = allVideosHash.get(hashString);
 
             // not a duplicate
             if (duplicateFile == null) {
-                allVideosHash.put(digest, file.getName());
+                allVideosHash.put(hashString, file.getName());
+                System.out.println(allVideosHash);
             }
 
             // is a duplicate
@@ -135,6 +142,14 @@ public class ProducerThread {
         } catch(Exception e){
             e.printStackTrace();
         }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : bytes) {
+            hexString.append(String.format("%02x", b));
+        }
+        return hexString.toString();
     }
 
 
