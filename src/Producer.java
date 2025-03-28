@@ -1,4 +1,5 @@
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -15,9 +16,16 @@ public class Producer {
             while (!producerThreads.isEmpty()) {
                 try {
                     Message messageFromConsumer = (Message) objectInputStream.readObject();
-                    if (messageFromConsumer == null) {}
+                   if (messageFromConsumer.getStatusCode() == StatusCode.QUEUE_FULL) {
+                        System.out.println("[Warning] Queue is full. File [" + messageFromConsumer.getFilename() + "] failed to transfer.");
+                    }
                 }catch (Exception e) {
-                    e.printStackTrace();
+                    System.out.println("Consumer may have disconnected. Closing socket.");
+                    try {
+                        socket.close();
+                    } catch (IOException ex) {
+                        throw new RuntimeException(ex);
+                    }
                 }
             }
         }
@@ -37,6 +45,8 @@ public class Producer {
             producerThreads.add(new ProducerThread(i));
         }
 
+        listenerThread = new Thread(new ListenerThread());
+        listenerThread.start();
 
         while (!producerThreads.isEmpty()) {
             for (int i = 0; i < producerThreads.size(); i++) {
@@ -65,7 +75,9 @@ public class Producer {
 
 
             } catch (Exception e) {
-                e.printStackTrace();
+                // assume consumer has received it
+                consumerHasReceivedCompletion = true;
+
             }
         }
 
@@ -73,24 +85,29 @@ public class Producer {
 
 
     public static void main(String[] args) {
-        boolean isConnected = false;
         //System.out.print("Number of producers: ");
        // Scanner scanner = new Scanner(System.in);
 
-        int producerInstances = 3; // scanner.nextInt();
+        int producerInstances = 1; // scanner.nextInt();
 
        // scanner.close();
 
-        listenerThread = new Thread(new ListenerThread());
-        listenerThread.start();
+
 
         // 1: create a socket to connect to
 
-        while (!isConnected) {
+
+        try {
+            ServerSocket serverSocket = new ServerSocket(3000);
+
+            System.out.println("Hosting server: " + serverSocket.getInetAddress().getHostAddress());
+            socket = serverSocket.accept();
+
+
+            ///
+
             try {
-                socket = new Socket("localhost", 3000);
-                System.out.println("Connected to server");
-                isConnected = true;
+                System.out.println("Client has connected.");
                 objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
                 objectInputStream = new ObjectInputStream(socket.getInputStream());
 
@@ -103,13 +120,13 @@ public class Producer {
                 objectOutputStream.close();
                 objectInputStream.close();
 
-            } catch (IOException e) {
-                System.out.println("Could not connect to server. Retrying in 3 seconds.");
-                try {
-                    TimeUnit.SECONDS.sleep(3);
-                } catch (InterruptedException ex) {
-                }
+
+            } catch (Exception e) {
+
+
             }
+        } catch (Exception e) {
+
         }
 
 

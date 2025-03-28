@@ -21,14 +21,11 @@ public class ProducerThread {
                 System.out.println("Current working directory in Java : " + folder);
 
                 if (listOfFiles != null) {
-                    for (File file : listOfFiles) {
-                        if (file.isFile()) {
-                            System.out.println(file.getName());
-                            System.out.println(file.length());
-                        }
-                    }
-                    if (!checkIfDuplicate(listOfFiles[fileIndex])) {
-                        while (fileIndex != listOfFiles.length) {
+                    // while all files have not been uploaded
+                    while (fileIndex != listOfFiles.length) {
+                        String fileDuplicateName = checkIfDuplicate(listOfFiles[fileIndex]);
+                        // not a duplicate, therefore null
+                        if (fileDuplicateName == null) {
                             System.out.println("Sending file: " + listOfFiles[fileIndex].getName());
                             byte[] buffer = new byte[MAX_BYTES];
                             //try-with-resources to ensure closing stream
@@ -44,10 +41,16 @@ public class ProducerThread {
                                 send(StatusCode.FILE_COMPLETE, listOfFiles[fileIndex].length(), listOfFiles[fileIndex].getName(), null);
                             }
 
-                            fileIndex++;
+
 
                         }
-                    }
+                        //
+                        else {
+                            System.out.println("Duplicate file " + listOfFiles[fileIndex].getName() + " of " + fileDuplicateName);
+                        }
+                        fileIndex++;
+                 }
+
 
                     isDone = true;
 
@@ -69,7 +72,7 @@ public class ProducerThread {
     private final String path;
     private int MAX_BYTES = 1024 * 3;
     private Thread producerThread;
-    static Dictionary<byte[], Boolean> allVideosHash = new Hashtable<>();
+    private volatile static Dictionary<byte[], String> allVideosHash = new Hashtable<>();
 
     public ProducerThread(int threadIndex) {
 
@@ -86,7 +89,8 @@ public class ProducerThread {
 
     }
 
-    boolean checkIfDuplicate(File file)
+
+    synchronized static String checkIfDuplicate(File file)
     {
         try {
             InputStream inputStream = new FileInputStream(file);
@@ -95,17 +99,25 @@ public class ProducerThread {
             DigestInputStream digestInputStream = new DigestInputStream(inputStream, md);
             byte[] digest = digestInputStream.getMessageDigest().digest();
 
-            if (allVideosHash.get(digest) != null) {
-                return true;
+            String duplicateFile = allVideosHash.get(digest);
+
+            System.out.println(duplicateFile);
+            System.out.println(digest);
+
+            // not a duplicate
+            if (duplicateFile == null) {
+                allVideosHash.put(digest, file.getName());
             }
+
+            // is a duplicate
             else {
-                allVideosHash.put(digest, true);
+                return duplicateFile;
             }
 
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return false;
+        return null;
 
     }
 

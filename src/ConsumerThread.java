@@ -5,13 +5,20 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+
 public class ConsumerThread {
+
+
+    enum ModifyBufferType {
+        APPEND,
+        POP
+    }
 
     class CThread implements Runnable {
         @Override
         public void run() {
 
-            while (running)
+            while (running || !buffer.isEmpty())
             {
                 try {
                     if (filename != null && !buffer.isEmpty())
@@ -20,8 +27,9 @@ public class ConsumerThread {
                         // if request
                         if (statusCode == StatusCode.REQUEST)
                         {
-                            System.out.println(Arrays.toString(buffer.getFirst().getBytesToSendArray()));
                             fileOutputStream.write(buffer.getFirst().getBytesToSendArray());
+                            currentBytesReceived += buffer.getFirst().getBytesToSendArray().length;
+                            modifyBuffer(ModifyBufferType.POP, null);
                         }
 
                         // if end of file
@@ -37,7 +45,7 @@ public class ConsumerThread {
                             fileOutputStream.close();
                             cleanUpAfterDownloadingFile();
                         }
-                        modifyBuffer(1, null);
+
 
                     }
                 } catch (Exception e) {
@@ -83,10 +91,10 @@ public class ConsumerThread {
                 System.out.println("File created: " + filename);
             }
             else {
-                System.out.println("File already exists: " + filename);
+                System.out.println("File already exists, overwriting: " + filename);
             }
             
-            fileOutputStream = new FileOutputStream(file);
+            fileOutputStream = new FileOutputStream(file, false);
             // this.producerThreadAssigned = producerThreadAssigned;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -106,20 +114,19 @@ public class ConsumerThread {
 
     }
 
-    synchronized void modifyBuffer(int type, Message message)
+    synchronized void modifyBuffer(ModifyBufferType type, Message message)
     {
         // add
-        if (type == 0)
+        if (type == ModifyBufferType.APPEND)
         {
             buffer.add(message);
         }
 
         // delete
-        else if (type == 1) {
+        else if (type == ModifyBufferType.POP) {
             buffer.removeFirst();
         }
 
-        System.out.println("buffer: " + buffer.size());
 
 
 
