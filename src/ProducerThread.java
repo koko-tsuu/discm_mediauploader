@@ -56,6 +56,7 @@ public class ProducerThread {
 
                 } else {
                     System.out.println("[Empty Folder] No files to upload: " + folder.getName());
+                    isDone = true;
                 }
             } catch (Exception e) {
                 e.printStackTrace();
