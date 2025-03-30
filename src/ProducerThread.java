@@ -119,7 +119,6 @@ public class ProducerThread {
             // not a duplicate
             if (duplicateFile == null) {
                 allVideosHash.put(hashString, file.getName());
-                System.out.println(allVideosHash);
             }
 
             // is a duplicate
@@ -140,8 +139,6 @@ public class ProducerThread {
         for (byte b : bytes) {
             hexString.append(String.format("%02x", b));
         }
-        System.out.println(Arrays.toString(bytes));
-        System.out.println(hexString);
         return hexString.toString();
     }
 

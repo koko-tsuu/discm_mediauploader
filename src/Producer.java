@@ -107,7 +107,7 @@ public class Producer {
         System.out.print("Number of producers: ");
         Scanner scanner = new Scanner(System.in);
 
-        int producerInstances = 1;
+        int producerInstances = scanner.nextInt();;
 
         scanner.close();
 

@@ -321,12 +321,12 @@ public class Consumer {
 
     public static void main(String[] args) {
 
-        System.out.print("Number of consumer threads: 1\n");
+        System.out.print("Number of consumer threads: ");
         Scanner scanner = new Scanner(System.in);
         int consumerThreadsNum = scanner.nextInt();
 
 
-        System.out.print("Max queue length: 5\n");
+        System.out.print("Max queue length: ");
         maxQueueLength = scanner.nextInt();
         scanner.close();
 

@@ -1,13 +1,6 @@
 import java.io.Serializable;
 import java.util.Arrays;
 
-enum StatusCode {
-    REQUEST,
-    QUEUE_FULL,
-    FILE_COMPLETE,
-    FILE_ALL_COMPLETE;
-}
-
 // must implement Serializable in order to be sent
 public class Message implements Serializable {
    private final long byteSize;
@@ -44,17 +37,6 @@ public class Message implements Serializable {
         this.byteSize = 0;
         this.filename = null;
         this.bytesToSendArray = null;
-
-    }
-
-
-
-
-    public Message(StatusCode statusCode, byte[] bytesToSendArray) {
-        this.statusCode = statusCode;
-        this.byteSize = 0;
-        this.filename = null;
-        this.bytesToSendArray = bytesToSendArray;
 
     }
 
