@@ -27,6 +27,8 @@ public class Consumer {
     // files to be ignored due to queue being full
     volatile static Dictionary<String, Boolean> ignoreFileDictionary = new Hashtable<>();
 
+    // need a way to store the filenames
+
     // thread holders
     volatile static Thread listenerThread;
     volatile static Thread assignerThread;
@@ -69,7 +71,7 @@ public class Consumer {
 
             // message queue handling
             if (!messageQueue.isEmpty()) {
-                Message messageFromProducer = messageQueue.getFirst();
+                Message messageFromProducer = messageQueue.get(0);
                 StatusCode statusCode = messageFromProducer.getStatusCode();
                 String messageFilename = messageFromProducer.getFilename();
 
@@ -241,7 +243,7 @@ public class Consumer {
         if (type == ModifyMessageQueueType.APPEND) {
             messageQueue.add(message);
         } else if (type == ModifyMessageQueueType.POP) {
-            messageQueue.removeFirst();
+            messageQueue.remove(0);
         }
     }
 
@@ -334,6 +336,12 @@ public class Consumer {
             Files.createDirectory(Paths.get(System.getProperty("user.dir") + "\\output"));
         } catch (IOException e) {
             System.out.println("Could not create directory as output directory may already exist.");
+        }
+
+        try {
+            Files.createDirectory(Paths.get(System.getProperty("user.dir") + "\\output\\compressed"));
+        } catch (IOException e) {
+            System.out.println("Could not create directory as compressed directory inside of output folder may already exist.");
         }
 
         // 1: create a socket to connect to

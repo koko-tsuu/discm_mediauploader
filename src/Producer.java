@@ -29,7 +29,7 @@ public class Producer {
                 }catch (Exception e) {
 
                     // Not a graceful way to terminate the socket, but it works
-                    System.out.println("Consumer may have disconnected. Closing socket.");
+                    System.out.println("[Terminated] Consumer may have disconnected. Closing socket.");
                     try {
                         socket.close();
                     } catch (IOException ex) {

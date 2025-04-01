@@ -27,3 +27,9 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+
+### video files
+*.webm
+*.mp4
+*.mkv
