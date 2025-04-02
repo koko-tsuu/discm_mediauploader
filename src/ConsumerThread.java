@@ -100,10 +100,15 @@ public class ConsumerThread {
     private volatile boolean running = true;                                // to gracefully shutdown the thread
     private volatile ArrayList<Message> buffer = new ArrayList<>();         // store all data for a related file
     private Thread consumerThread;
+    static MainWindow mainWindow;
 
     public ConsumerThread() {
         this.consumerThread = new Thread(new CThread());
         this.consumerThread.start();
+    }
+
+    static void setMainWindow(MainWindow mainWindow) {
+        ConsumerThread.mainWindow = mainWindow;
     }
 
     void shutdown() {
@@ -146,11 +151,11 @@ public class ConsumerThread {
 
     void cleanUpAfterDownloadingFile()
     {
+        mainWindow.addDownloadedVideoUI(filename, 3);
         buffer.clear();
         currentBytesReceived = 0;
         filename = null;
     }
-
 
     enum ModifyBufferType {
         APPEND,

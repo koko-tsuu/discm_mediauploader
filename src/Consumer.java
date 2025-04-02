@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import javax.swing.SwingUtilities;
 
 /*
     NOTE: Consumer already automatically creates an output directory if it doesn't exist
@@ -27,8 +28,6 @@ public class Consumer {
     // files to be ignored due to queue being full
     volatile static Dictionary<String, Boolean> ignoreFileDictionary = new Hashtable<>();
 
-    // need a way to store the filenames
-
     // thread holders
     volatile static Thread listenerThread;
     volatile static Thread assignerThread;
@@ -41,6 +40,19 @@ public class Consumer {
 
     //
     volatile static boolean allFilesDownloaded = false;
+
+    static MainWindow mainWindow;
+
+
+    static class ConsumerGUI implements Runnable {
+        @Override
+        public void run() {
+            mainWindow = new MainWindow();
+            ConsumerThread.setMainWindow(mainWindow);
+            mainWindow.show();
+        }
+    }
+
 
     static class ListenerThread implements Runnable {
         // Overriding the run Method
@@ -366,10 +378,14 @@ public class Consumer {
                     assignerThread = new Thread(new AssignerThread());
                     assignerThread.start();
 
+                    Thread consumerGUIThread = new Thread(new ConsumerGUI());
+                    consumerGUIThread.start();
+
 
                     for (int i = 0; i < consumerThreadsNum; i++) {
                         consumerThreadsList.add(new ConsumerThread());
                     }
+
 
                     // wait until all threads are done
                     listenerThread.join();
