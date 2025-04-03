@@ -16,6 +16,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainWindow {
 
@@ -64,9 +65,9 @@ public class MainWindow {
 
         }
 
-        synchronized void changeMedia(String filename, int retries){
+        synchronized void changeMedia(String filename){
+            Platform.runLater(()-> {
             videoPlayerPanel.removeAll();
-
 
 
             File video = new File(System.getProperty("user.dir") + "\\output\\compressed\\" + filename);
@@ -74,34 +75,99 @@ public class MainWindow {
             MediaPlayer player = new MediaPlayer(m);
             MediaView viewer = new MediaView(player);
 
-            if (player.getError() != null) {
-                if (retries > 0) {
-                    changeMedia(filename, retries - 1);
-                }
-                else {
-                    System.out.println("Failed to load the video " + filename + ": " + player.getError());
-                }
-            }
-            else {
-                loadVideo(viewer, player);
-            }
+            // video instantiate
+            final JFXPanel vfxPanel = new JFXPanel();
+
+            StackPane root = new StackPane();
+            Scene scene = new Scene(root);
+
+            // center video position
+            javafx.geometry.Rectangle2D screen = Screen.getPrimary().getVisualBounds();
+            viewer.setX((screen.getWidth() - videoPlayerPanel.getWidth()) / 2);
+            viewer.setY((screen.getHeight() - videoPlayerPanel.getHeight()) / 2);
+
+            // resize video based on screen size
+            DoubleProperty width = viewer.fitWidthProperty();
+            DoubleProperty height = viewer.fitHeightProperty();
+            width.bind(Bindings.selectDouble(viewer.sceneProperty(), "width"));
+            height.bind(Bindings.selectDouble(viewer.sceneProperty(), "height"));
+            viewer.setPreserveRatio(true);
+
+            // add video to stackpane
+            root.getChildren().add(viewer);
+
+            vfxPanel.setScene(scene);
+
+            videoPlayerPanel.add(vfxPanel, BorderLayout.CENTER);
+
+
+
+            JPanel playerButtons = new JPanel(new FlowLayout());
+
+            JButton pauseButton = new JButton("Pause");
+            pauseButton.addActionListener(e -> {
+                player.pause();
+            });
+            JButton playButton = new JButton("Play");
+            playButton.addActionListener(e -> {
+                player.play();
+            });
+            JButton stopButton = new JButton("Stop");
+            stopButton.addActionListener(e -> {
+                player.stop();
+            });
+
+            playerButtons.add(pauseButton);
+            playerButtons.add(playButton);
+            playerButtons.add(stopButton);
+
+            videoPlayerPanel.add(playerButtons, BorderLayout.PAGE_END);
+
+            JButton backButton = new JButton("Back");
+            backButton.addActionListener((ActionEvent ae) ->
+            {
+                CardLayout cardLayout = (CardLayout) cardLayoutPanel.getLayout();
+                cardLayout.show(cardLayoutPanel, cardLayoutStrings[0]);
+                player.stop();
+            });
+            videoPlayerPanel.add(backButton, BorderLayout.PAGE_START);
+
+
+
+            videoPlayerPanel.revalidate();
+            videoPlayerPanel.repaint();
+
+            cardLayoutPanel.revalidate();
+            cardLayoutPanel.repaint();
+        });
+
 
 
         }
 
-        void loadVideo(MediaView viewer, MediaPlayer player)
+
+        synchronized void addDownloadedVideoUI(String filename)
         {
-            Platform.runLater(()-> {
-                // video instantiate
-                final JFXPanel vfxPanel = new JFXPanel();
+
+            JLabel videoNameLabel = new JLabel(filename);
+            final JFXPanel vfxPanel = new JFXPanel();
+
+            Platform.runLater(() -> {
+                File video = new File(System.getProperty("user.dir") + "\\output\\compressed\\" + filename);
+
+                Media m = new Media(video.toURI().toString());
+                MediaPlayer player = new MediaPlayer(m);
+                MediaView viewer = new MediaView(player);
+
 
                 StackPane root = new StackPane();
                 Scene scene = new Scene(root);
 
                 // center video position
                 javafx.geometry.Rectangle2D screen = Screen.getPrimary().getVisualBounds();
-                viewer.setX((screen.getWidth() - videoPlayerPanel.getWidth()) / 2);
-                viewer.setY((screen.getHeight() - videoPlayerPanel.getHeight()) / 2);
+                viewer.setX((screen.getWidth() - gridLayoutPanel.getWidth()) / 2);
+                viewer.setY((screen.getHeight() - gridLayoutPanel.getHeight()) / 2);
+
 
                 // resize video based on screen size
                 DoubleProperty width = viewer.fitWidthProperty();
@@ -110,171 +176,79 @@ public class MainWindow {
                 height.bind(Bindings.selectDouble(viewer.sceneProperty(), "height"));
                 viewer.setPreserveRatio(true);
 
+
                 // add video to stackpane
                 root.getChildren().add(viewer);
 
                 vfxPanel.setScene(scene);
 
-                videoPlayerPanel.add(vfxPanel, BorderLayout.CENTER);
 
+                vfxPanel.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        super.mouseEntered(e);
+                        player.play();
+                        player.setStopTime(Duration.millis(10000.0));
+                        player.setOnEndOfMedia(new Runnable() {
+                            @Override
+                            public void run() {
+                                player.stop();
 
+                            }
+                        });
+                    }
 
-                JPanel playerButtons = new JPanel(new FlowLayout());
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        super.mouseExited(e);
+                        player.stop();
+                    }
 
-                JButton pauseButton = new JButton("Pause");
-                pauseButton.addActionListener(e -> {
-                    player.pause();
+                    @Override
+                    public void mouseClicked(MouseEvent e) {
+                        super.mouseClicked(e);
+                        changeMedia(filename);
+                        CardLayout cardLayout = (CardLayout) cardLayoutPanel.getLayout();
+                        cardLayout.show(cardLayoutPanel, cardLayoutStrings[1]);
+                    }
                 });
-                JButton playButton = new JButton("Play");
-                playButton.addActionListener(e -> {
-                    player.play();
-                });
-                JButton stopButton = new JButton("Stop");
-                stopButton.addActionListener(e -> {
-                    player.stop();
-                });
-
-                playerButtons.add(pauseButton);
-                playerButtons.add(playButton);
-                playerButtons.add(stopButton);
-
-                videoPlayerPanel.add(playerButtons, BorderLayout.PAGE_END);
-
-                JButton backButton = new JButton("Back");
-                backButton.addActionListener((ActionEvent ae) ->
-                {
-                    CardLayout cardLayout = (CardLayout) cardLayoutPanel.getLayout();
-                    cardLayout.show(cardLayoutPanel, cardLayoutStrings[0]);
-                    player.stop();
-                });
-                videoPlayerPanel.add(backButton, BorderLayout.PAGE_START);
 
 
+                GridBagConstraints gridBagConstraints2 = new GridBagConstraints();
+                gridBagConstraints2.insets = new Insets(5, 5, 5, 5);
+                gridBagConstraints2.gridy = rowCount;
+                gridBagConstraints2.gridx = 0;
+                gridBagConstraints2.weightx = 3.0;
+                gridBagConstraints2.weighty = 30.0;
+                gridBagConstraints2.fill = GridBagConstraints.BOTH;
+
+                gridLayoutPanel.add(videoNameLabel, gridBagConstraints2);
+
+
+                GridBagConstraints gridBagConstraints3 = new GridBagConstraints();
+                gridBagConstraints3.insets = new Insets(5, 5, 5, 5);
+                gridBagConstraints3.gridy = rowCount;
+                gridBagConstraints3.gridx = 1;
+                gridBagConstraints3.weightx = 50.0;
+                gridBagConstraints3.weighty = 30.0;
+                gridBagConstraints3.fill = GridBagConstraints.BOTH;
+
+                gridLayoutPanel.setPreferredSize(new Dimension(gridLayoutPanel.getWidth(), gridLayoutPanel.getHeight() + 100));
+
+                gridLayoutPanel.add(vfxPanel, gridBagConstraints3);
 
                 videoPlayerPanel.revalidate();
                 videoPlayerPanel.repaint();
 
+                gridLayoutPanel.revalidate();
+                gridLayoutPanel.repaint();
+
                 cardLayoutPanel.revalidate();
                 cardLayoutPanel.repaint();
+
+                rowCount++;
             });
 
-        }
-
-
-        synchronized void addDownloadedVideoUI(String filename, int retries)
-        {
-
-            JLabel videoNameLabel = new JLabel(filename);
-            final JFXPanel vfxPanel = new JFXPanel();
-
-            File video = new File(System.getProperty("user.dir") + "\\output\\compressed\\" + filename);
-
-            Media m = new Media(video.toURI().toString());
-            MediaPlayer player = new MediaPlayer(m);
-            MediaView viewer = new MediaView(player);
-
-            if (player.getError() != null) {
-                if (retries > 0) {
-                    addDownloadedVideoUI(filename, retries - 1);
-                }
-                else {
-                    System.out.println("Failed to load the video " + filename + ": " + player.getError());
-                }
-            }
-            else {
-
-                Platform.runLater(() -> {
-
-
-                    StackPane root = new StackPane();
-                    Scene scene = new Scene(root);
-
-                    // center video position
-                    javafx.geometry.Rectangle2D screen = Screen.getPrimary().getVisualBounds();
-                    viewer.setX((screen.getWidth() - gridLayoutPanel.getWidth()) / 2);
-                    viewer.setY((screen.getHeight() - gridLayoutPanel.getHeight()) / 2);
-
-
-                    // resize video based on screen size
-                    DoubleProperty width = viewer.fitWidthProperty();
-                    DoubleProperty height = viewer.fitHeightProperty();
-                    width.bind(Bindings.selectDouble(viewer.sceneProperty(), "width"));
-                    height.bind(Bindings.selectDouble(viewer.sceneProperty(), "height"));
-                    viewer.setPreserveRatio(true);
-
-
-                    // add video to stackpane
-                    root.getChildren().add(viewer);
-
-                    vfxPanel.setScene(scene);
-
-
-                    vfxPanel.addMouseListener(new MouseAdapter() {
-                        @Override
-                        public void mouseEntered(MouseEvent e) {
-                            super.mouseEntered(e);
-                            player.play();
-                            player.setStopTime(Duration.millis(10000.0));
-                            player.setOnEndOfMedia(new Runnable() {
-                                @Override
-                                public void run() {
-                                    player.stop();
-
-                                }
-                            });
-                        }
-
-                        @Override
-                        public void mouseExited(MouseEvent e) {
-                            super.mouseExited(e);
-                            player.stop();
-                        }
-
-                        @Override
-                        public void mouseClicked(MouseEvent e) {
-                            super.mouseClicked(e);
-                            changeMedia(filename, 3);
-                            CardLayout cardLayout = (CardLayout) cardLayoutPanel.getLayout();
-                            cardLayout.show(cardLayoutPanel, cardLayoutStrings[1]);
-                        }
-                    });
-
-
-                    GridBagConstraints gridBagConstraints2 = new GridBagConstraints();
-                    gridBagConstraints2.insets = new Insets(5, 5, 5, 5);
-                    gridBagConstraints2.gridy = rowCount;
-                    gridBagConstraints2.gridx = 0;
-                    gridBagConstraints2.weightx = 3.0;
-                    gridBagConstraints2.weighty = 30.0;
-                    gridBagConstraints2.fill = GridBagConstraints.BOTH;
-
-                    gridLayoutPanel.add(videoNameLabel, gridBagConstraints2);
-
-
-                    GridBagConstraints gridBagConstraints3 = new GridBagConstraints();
-                    gridBagConstraints3.insets = new Insets(5, 5, 5, 5);
-                    gridBagConstraints3.gridy = rowCount;
-                    gridBagConstraints3.gridx = 1;
-                    gridBagConstraints3.weightx = 50.0;
-                    gridBagConstraints3.weighty = 30.0;
-                    gridBagConstraints3.fill = GridBagConstraints.BOTH;
-
-                    gridLayoutPanel.setPreferredSize(new Dimension(gridLayoutPanel.getWidth(), gridLayoutPanel.getHeight() + 100));
-
-                    gridLayoutPanel.add(vfxPanel, gridBagConstraints3);
-
-                    videoPlayerPanel.revalidate();
-                    videoPlayerPanel.repaint();
-
-                    gridLayoutPanel.revalidate();
-                    gridLayoutPanel.repaint();
-
-                    cardLayoutPanel.revalidate();
-                    cardLayoutPanel.repaint();
-
-                    rowCount++;
-                });
-            }
         }
 
         void show()

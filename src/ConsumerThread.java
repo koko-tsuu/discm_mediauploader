@@ -151,7 +151,7 @@ public class ConsumerThread {
 
     void cleanUpAfterDownloadingFile()
     {
-        mainWindow.addDownloadedVideoUI(filename, 3);
+        mainWindow.addDownloadedVideoUI(filename);
         buffer.clear();
         currentBytesReceived = 0;
         filename = null;
