@@ -32,7 +32,7 @@ public class Consumer {
     volatile static Thread listenerThread;
     volatile static Thread assignerThread;
 
-    // recieved the message from the Producer that it has finished sending its file
+    // received the message from the Producer that it has finished sending its file
     volatile static boolean receivedFileAllCompleteMessage = false;
 
     // messages from Producer queued

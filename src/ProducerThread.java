@@ -1,4 +1,6 @@
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -12,6 +14,11 @@ public class ProducerThread {
         @Override
         public void run()
         {
+            try {
+                Files.createDirectory(Paths.get(System.getProperty("user.dir") + "\\path"));
+            } catch (IOException e) {
+            }
+
             try {
                 int fileIndex = 0;
                 File folder = new File(System.getProperty("user.dir") + "\\" + path);
