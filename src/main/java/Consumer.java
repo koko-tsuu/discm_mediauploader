@@ -342,7 +342,7 @@ public class Consumer {
 
         System.out.print("Max queue length: ");
         maxQueueLength = scanner.nextInt();
-        scanner.close();
+
 
         try {
             Files.createDirectory(Paths.get(System.getProperty("user.dir") + "\\output"));
@@ -359,11 +359,16 @@ public class Consumer {
         // 1: create a socket to connect to
         Socket socket = null;
         boolean isConnected = false;
+        scanner.nextLine();
+        System.out.print("Host: ");
+        String host = scanner.nextLine();
 
         while (!isConnected) {
+
+
             // this will retry until connected
             try {
-                socket = new Socket("localhost", 3000);
+                socket = new Socket(host, 3000);
 
                 try {
                     isConnected = true;
@@ -409,6 +414,7 @@ public class Consumer {
                     throw new RuntimeException(ex);
                 }
             }
+            scanner.close();
         }
 
     }
