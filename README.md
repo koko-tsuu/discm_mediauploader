@@ -1,5 +1,6 @@
 ## Setup
 I had difficulty creating and running .jar file without it erroring for JavaFX, otherwise backend wise it does work, so for the Consumer, I suggest running it in Intellij.
+
 Configuration:
 --module-path "D:\stdiscm\discm_mediauploader\javafx-sdk-24\lib" --add-modules javafx.controls,javafx.fxml,javafx.web,javafx.media,javafx.swing
 
