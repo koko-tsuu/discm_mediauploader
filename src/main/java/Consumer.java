@@ -15,7 +15,7 @@ public class Consumer {
     static ObjectOutputStream objectOutputStream;
     static ObjectInputStream objectInputStream;
 
-    static Integer maxQueueLength;
+    static Integer maxQueueLength = -1;
 
     volatile static ArrayList<ConsumerThread> consumerThreadsList = new ArrayList<>();
 
@@ -335,13 +335,18 @@ public class Consumer {
 
     public static void main(String[] args) {
 
-        System.out.print("Number of consumer threads: ");
+
+        int consumerThreadsNum = -1;
         Scanner scanner = new Scanner(System.in);
-        int consumerThreadsNum = scanner.nextInt();
+        while (consumerThreadsNum <= 0) {
+            System.out.print("Number of consumer threads: ");
+            consumerThreadsNum = scanner.nextInt();
+        }
 
-
-        System.out.print("Max queue length: ");
-        maxQueueLength = scanner.nextInt();
+        while(maxQueueLength <= 0) {
+            System.out.print("Max queue length: ");
+            maxQueueLength = scanner.nextInt();
+        }
 
 
         try {

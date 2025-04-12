@@ -49,6 +49,12 @@
         <version>0.0.8</version>
         <configuration>
           <mainClass>Consumer</mainClass>
+          <options>
+            <option>--add-exports</option>
+            <option>javafx.graphics/com.sun.glass.ui=ALL-UNNAMED</option>
+            <option>--add-exports</option>
+            <option>javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
+          </options>
         </configuration>
       </plugin>
     </plugins>

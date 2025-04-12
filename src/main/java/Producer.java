@@ -104,10 +104,14 @@ public class Producer {
 
 
     public static void main(String[] args) {
-        System.out.print("Number of producers: ");
+
         Scanner scanner = new Scanner(System.in);
 
-        int producerInstances = scanner.nextInt();;
+        int producerInstances = -1;
+        while (producerInstances <= 0) {
+            System.out.print("Number of producers: ");
+            producerInstances = scanner.nextInt();
+        }
 
         scanner.close();
 
